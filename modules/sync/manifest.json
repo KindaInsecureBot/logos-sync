@@ -1,0 +1,8 @@
+{
+    "name": "sync_module",
+    "version": "0.1.0",
+    "type": "core",
+    "description": "Shared sync library for Logos Basecamp plugins",
+    "interface": "com.logos.SyncModuleInterface",
+    "dependencies": ["kv_module"]
+}
