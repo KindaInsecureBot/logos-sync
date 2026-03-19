@@ -90,7 +90,7 @@ connect(cs, &ContentStore::error,   [](const QString& msg) { ... });
 
 ### ChannelSync
 
-Zone SDK L1 channel inscriptions over `zone_module` (org.logos.ZoneSDKModuleInterface).
+Zone SDK L1 channel inscriptions over `blockchain_module` (org.logos.BlockchainModuleInterface).
 
 #### Channel ID convention
 
@@ -102,7 +102,7 @@ SHA-256("λ<APP>:" + uniqueId)     → any app-specific channel
 
 ```cpp
 ChannelSync* ch = syncModule->channelSync();
-ch->setBlockchainClient(api->getClient("zone_module"));
+ch->setBlockchainClient(api->getClient("blockchain_module"));
 ch->setSigningKey(privkeyHex);  // optional: signing key for inscriptions
 
 // Derive channel ID
@@ -111,12 +111,8 @@ QString channelId = ChannelSync::deriveChannelId("BLOG", authorPubkey);
 // Inscribe
 QString inscId = ch->inscribe(channelId, dataBytes);
 
-// Query history → list of (inscriptionId, data) pairs
-QList<QPair<QString,QByteArray>> entries = ch->queryChannel(channelId);
-
-// Via SyncModule (Q_INVOKABLE, returns JSON): 
-// [{"id":"...","data":"<hex>"},...]
-QString json = syncModule->queryChannel(channelId);
+// Query history → JSON array of inscriptions: [{"id":"...","data":"<hex>"},...]
+QString json = ch->queryChannel(channelId);
 
 // Live events
 ch->follow(channelId);
@@ -125,7 +121,7 @@ ch->unfollow(channelId);
 // Signals
 connect(ch, &ChannelSync::inscribed,           [](const QString& ch, const QString& id) { ... });
 connect(ch, &ChannelSync::inscriptionReceived, [](const QString& ch, const QString& id, const QByteArray& data) { ... });
-connect(ch, &ChannelSync::error,               [](const QString& op, const QString& msg) { ... });
+connect(ch, &ChannelSync::error,               [](const QString& msg) { ... });
 ```
 
 ### PeerSync
@@ -139,7 +135,7 @@ SHA-256("<appPrefix>-channel:<pubkeyHex>") → peer's conversation channel
 ```
 
 ```cpp
-LogosSync::PeerSync* ps = syncModule->peerSync();
+PeerSync* ps = syncModule->peerSync();
 ps->setChatClient(api->getClient("chat_module"));
 ps->setAppPrefix("BLOG");          // sets the namespace for convo ID derivation
 ps->setOwnPubkey(myPubkeyHex);     // starts watching own channel on start()
@@ -157,10 +153,10 @@ ps->unsubscribe(authorPubkeyHex);
 QString convoId = ps->convoIdForPubkey(authorPubkeyHex);
 
 // Signals
-connect(ps, &LogosSync::PeerSync::messageReceived,
+connect(ps, &PeerSync::messageReceived,
         [](const QString& sender, const QByteArray& msg) { ... });
-connect(ps, &LogosSync::PeerSync::started, []() { ... });
-connect(ps, &LogosSync::PeerSync::error,   [](const QString& msg) { ... });
+connect(ps, &PeerSync::started, []() { ... });
+connect(ps, &PeerSync::error,   [](const QString& msg) { ... });
 ```
 
 ### SyncModule (PluginInterface)
