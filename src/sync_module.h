@@ -49,9 +49,9 @@ public:
     Q_INVOKABLE void peerUnsubscribe(const QString& pubkeyHex);
 
     // Direct sub-object access for in-process callers.
-    LogosSync::ContentStore* contentStore() const { return m_contentStore; }
-    ChannelSync*             channelSync()  const { return m_channelSync; }
-    LogosSync::PeerSync*     peerSync()     const { return m_peerSync; }
+    ContentStore*        contentStore() const { return m_contentStore; }
+    ChannelSync*         channelSync()  const { return m_channelSync; }
+    LogosSync::PeerSync* peerSync()     const { return m_peerSync; }
 
 signals:
     // ContentStore
@@ -72,9 +72,9 @@ signals:
     void syncError(const QString& source, const QString& message);
 
 private:
-    LogosSync::ContentStore* m_contentStore = nullptr;
-    ChannelSync*             m_channelSync  = nullptr;
-    LogosSync::PeerSync*     m_peerSync     = nullptr;
+    ContentStore*        m_contentStore = nullptr;
+    ChannelSync*         m_channelSync  = nullptr;
+    LogosSync::PeerSync* m_peerSync     = nullptr;
 
     void connectSignals();
     void connectZoneModule(LogosAPI* api);

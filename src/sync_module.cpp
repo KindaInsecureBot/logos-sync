@@ -8,7 +8,7 @@
 
 SyncModule::SyncModule(QObject* parent)
     : QObject(parent)
-    , m_contentStore(new LogosSync::ContentStore(this))
+    , m_contentStore(new ContentStore(this))
     , m_channelSync(new ChannelSync(this))
     , m_peerSync(new LogosSync::PeerSync(this))
 {
@@ -17,11 +17,11 @@ SyncModule::SyncModule(QObject* parent)
 
 void SyncModule::connectSignals()
 {
-    connect(m_contentStore, &LogosSync::ContentStore::stored,
+    connect(m_contentStore, &ContentStore::stored,
             this, &SyncModule::stored);
-    connect(m_contentStore, &LogosSync::ContentStore::fetched,
+    connect(m_contentStore, &ContentStore::fetched,
             this, &SyncModule::fetched);
-    connect(m_contentStore, &LogosSync::ContentStore::error,
+    connect(m_contentStore, &ContentStore::error,
             this, [this](const QString& msg) { emit syncError("content", msg); });
 
     connect(m_channelSync, &ChannelSync::inscribed,
