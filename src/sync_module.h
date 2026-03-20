@@ -26,7 +26,7 @@ public:
 
     Q_INVOKABLE QString name() const override { return QStringLiteral("sync_module"); }
     Q_INVOKABLE QString version() const override { return QStringLiteral("0.1.0"); }
-    Q_INVOKABLE void    initLogos(LogosAPI* api) override;
+    Q_INVOKABLE void    initLogos(LogosAPI* api);
 
     // ── ContentStore API ──────────────────────────────────────────────────────
     Q_INVOKABLE QString    store(const QByteArray& content, int chunkSize = 256 * 1024);
