@@ -10,10 +10,13 @@ Every Basecamp plugin that needs to store blobs, anchor data on-chain, or do liv
 
 ```
    blog_plugin ──┐
-   notes_plugin ──┤──► sync_module ──► storage_module (CID blobs)
-   wiki_plugin ──┘                ──► zone_module    (L1 inscriptions)
-                                  ──► chat_module    (P2P messaging)
+   notes_plugin ──┤──► sync_module ──► storage_module  (CID blobs)
+   wiki_plugin ──┘                ──► blockchain_module (L1 channel inscriptions)
+                                  ──► chat_module      (P2P messaging)
 ```
+
+> **Build status:** Unit tests pass (47/47). Module compiles against
+> logos-cpp-sdk + logos-liblogos (Qt 6.10.2, GCC 15.2.0).
 
 ---
 
@@ -24,11 +27,11 @@ logos-sync/
 ├── src/
 │   ├── sync_types.h        # deriveChannelId / deriveConvoId helpers + App constants
 │   ├── content_store.h/cpp # ContentStore — wraps storage_module
-│   ├── channel_sync.h/cpp  # ChannelSync  — wraps zone_module (L1 inscriptions)
+│   ├── channel_sync.h/cpp  # ChannelSync  — wraps blockchain_module (L1 inscriptions)
 │   ├── peer_sync.h/cpp     # PeerSync     — wraps chat_module (P2P messaging)
 │   └── sync_module.h/cpp   # SyncModule   — PluginInterface entry point
 ├── tests/
-│   ├── module_proxy.h      # no-op stub (tests compile without Logos SDK)
+│   ├── logos_api_client.h  # no-op stub (tests compile without Logos SDK)
 │   ├── test_sync_types.cpp
 │   ├── test_content_store.cpp
 │   ├── test_channel_sync.cpp
@@ -164,7 +167,7 @@ connect(ps, &PeerSync::error,   [](const QString& msg) { ... });
 The main entry point.  Other plugins call:
 
 ```cpp
-ModuleProxy* sync = api->getClient("sync_module");
+LogosAPIClient* sync = api->getClient("sync_module");
 
 // ContentStore
 sync->invokeRemoteMethod("sync_module", "store",   content, chunkSize);  // → QString CID
@@ -196,7 +199,7 @@ sync->invokeRemoteMethod("sync_module", "peerUnsubscribe",  pubkeyHex);
 ```cpp
 void BlogPlugin::initLogos(LogosAPI* api)
 {
-    ModuleProxy* sync = api->getClient("sync_module");
+    LogosAPIClient* sync = api->getClient("sync_module");
 
     // Set up PeerSync for blog namespace
     sync->invokeRemoteMethod("sync_module", "setAppPrefix", QString("BLOG"));
