@@ -1,6 +1,7 @@
 #pragma once
 #include "content_store.h"
 #include "channel_sync.h"
+#include "channel_indexer.h"
 #include "peer_sync.h"
 #include "core/interface.h"
 #include <QtPlugin>
@@ -9,12 +10,12 @@ class LogosAPIClient;
 
 // SyncModule — main PluginInterface entry point for logos-sync.
 //
-// Wires ContentStore, ChannelSync, and PeerSync to the Logos SDK module
-// system.  Other plugins obtain a client via:
+// Wires ContentStore, ChannelSync, ChannelIndexer, and PeerSync to the Logos
+// SDK module system.  Other plugins obtain a client via:
 //   LogosAPIClient* sync = api->getClient("sync_module");
 // then call Q_INVOKABLE methods through invokeRemoteMethod().
 //
-// All three sub-APIs are also accessible directly when SyncModule is used
+// All four sub-APIs are also accessible directly when SyncModule is used
 // as an in-process library (tests, future mono-build scenarios).
 class SyncModule : public QObject, public PluginInterface {
     Q_OBJECT
@@ -42,6 +43,19 @@ public:
     Q_INVOKABLE void    follow(const QString& channelId);
     Q_INVOKABLE void    unfollow(const QString& channelId);
 
+    // ── ChannelIndexer API ────────────────────────────────────────────────────
+    Q_INVOKABLE QString    discoverChannels(const QString& appPrefix);
+    Q_INVOKABLE void       refreshDiscovery(const QString& appPrefix);
+    Q_INVOKABLE QByteArray getLatestInscription(const QString& channelId);
+    Q_INVOKABLE QString    getHistory(const QString& channelId,
+                                      const QString& cursorJson = QString(),
+                                      int limit = 50);
+    Q_INVOKABLE int        getInscriptionCount(const QString& channelId);
+    Q_INVOKABLE void       followIndex(const QString& channelId);
+    Q_INVOKABLE void       unfollowIndex(const QString& channelId);
+    Q_INVOKABLE void       followPrefix(const QString& appPrefix);
+    Q_INVOKABLE void       unfollowPrefix(const QString& appPrefix);
+
     // ── PeerSync API ──────────────────────────────────────────────────────────
     Q_INVOKABLE void setAppPrefix(const QString& appPrefix);
     Q_INVOKABLE void setOwnPubkey(const QString& pubkeyHex);
@@ -50,9 +64,10 @@ public:
     Q_INVOKABLE void peerUnsubscribe(const QString& pubkeyHex);
 
     // Direct sub-object access for in-process callers.
-    ContentStore* contentStore() const { return m_contentStore; }
-    ChannelSync*             channelSync()  const { return m_channelSync; }
-    PeerSync*                peerSync()     const { return m_peerSync; }
+    ContentStore*   contentStore()    const { return m_contentStore; }
+    ChannelSync*    channelSync()     const { return m_channelSync; }
+    ChannelIndexer* channelIndexer()  const { return m_channelIndexer; }
+    PeerSync*       peerSync()        const { return m_peerSync; }
 
 signals:
     // ContentStore
@@ -65,17 +80,24 @@ signals:
                              const QString& inscriptionId,
                              const QByteArray& data);
 
+    // ChannelIndexer
+    void indexInscriptionDiscovered(const QString& channelId,
+                                    const QString& inscriptionId,
+                                    const QByteArray& data);
+    void indexChannelDiscovered(const QString& appPrefix, const QString& channelId);
+
     // PeerSync
     void messageReceived(const QString& senderPubkey, const QByteArray& message);
     void peerSyncStarted();
 
-    // Unified error signal: source is "content", "channel", or "peer".
+    // Unified error signal: source is "content", "channel", "index", or "peer".
     void syncError(const QString& source, const QString& message);
 
 private:
-    ContentStore* m_contentStore = nullptr;
-    ChannelSync*             m_channelSync  = nullptr;
-    PeerSync*                m_peerSync     = nullptr;
+    ContentStore*   m_contentStore   = nullptr;
+    ChannelSync*    m_channelSync    = nullptr;
+    ChannelIndexer* m_channelIndexer = nullptr;
+    PeerSync*       m_peerSync       = nullptr;
 
     void connectSignals();
     void connectBlockchainModule(LogosAPI* api);

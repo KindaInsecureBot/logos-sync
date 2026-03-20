@@ -10,6 +10,7 @@ SyncModule::SyncModule(QObject* parent)
     : QObject(parent)
     , m_contentStore(new ContentStore(this))
     , m_channelSync(new ChannelSync(this))
+    , m_channelIndexer(new ChannelIndexer(this))
     , m_peerSync(new PeerSync(this))
 {
     connectSignals();
@@ -31,6 +32,13 @@ void SyncModule::connectSignals()
     connect(m_channelSync, &ChannelSync::error,
             this, [this](const QString& msg) { emit syncError("channel", msg); });
 
+    connect(m_channelIndexer, &ChannelIndexer::inscriptionDiscovered,
+            this, &SyncModule::indexInscriptionDiscovered);
+    connect(m_channelIndexer, &ChannelIndexer::channelDiscovered,
+            this, &SyncModule::indexChannelDiscovered);
+    connect(m_channelIndexer, &ChannelIndexer::error,
+            this, [this](const QString& msg) { emit syncError("index", msg); });
+
     connect(m_peerSync, &PeerSync::messageReceived,
             this, &SyncModule::messageReceived);
     connect(m_peerSync, &PeerSync::started,
@@ -46,7 +54,13 @@ void SyncModule::initLogos(LogosAPI* api)
 
     if (LogosAPIClient* blockchain = api->getClient("blockchain_module")) {
         m_channelSync->setBlockchainClient(blockchain);
+        m_channelIndexer->setBlockchainClient(blockchain);
         connectBlockchainModule(api);
+    }
+
+    if (LogosAPIClient* kv = api->getClient("kv_module")) {
+        m_channelIndexer->setKvClient(kv);
+        m_channelIndexer->loadCacheState();
     }
 
     if (LogosAPIClient* chat = api->getClient("chat_module")) {
@@ -69,6 +83,15 @@ void SyncModule::connectBlockchainModule(LogosAPI* api)
         const QByteArray dataBytes  = QByteArray::fromHex(
             data.value(2).toString().toLatin1());
         m_channelSync->onInscription(channelId, inscriptionId, dataBytes);
+        m_channelIndexer->onNewInscription(channelId, inscriptionId, dataBytes, 0);
+    });
+
+    // blockchain_module fires: blockFinalized(slot)
+    client->onEvent(nullptr, nullptr, "blockFinalized",
+        [this](const QString& /*eventName*/, const QVariantList& data) {
+        if (data.isEmpty()) return;
+        const quint64 slot = static_cast<quint64>(data.value(0).toULongLong());
+        m_channelIndexer->onBlockFinalized(slot);
     });
 }
 
@@ -130,6 +153,61 @@ void SyncModule::follow(const QString& channelId)
 void SyncModule::unfollow(const QString& channelId)
 {
     m_channelSync->unfollow(channelId);
+}
+
+QString SyncModule::discoverChannels(const QString& appPrefix)
+{
+    return m_channelIndexer->discoverChannels(appPrefix);
+}
+
+void SyncModule::refreshDiscovery(const QString& appPrefix)
+{
+    m_channelIndexer->refreshDiscovery(appPrefix);
+}
+
+QByteArray SyncModule::getLatestInscription(const QString& channelId)
+{
+    return m_channelIndexer->getLatestInscription(channelId);
+}
+
+QString SyncModule::getHistory(const QString& channelId,
+                                const QString& cursorJson,
+                                int limit)
+{
+    IndexerCursor cursor;
+    if (!cursorJson.isEmpty()) {
+        const QJsonDocument doc = QJsonDocument::fromJson(cursorJson.toUtf8());
+        if (doc.isObject())
+            cursor = IndexerCursor::fromJson(doc.object());
+    }
+    const IndexerPage page = m_channelIndexer->getHistory(channelId, cursor, limit);
+    return QString::fromUtf8(
+        QJsonDocument(page.toJson()).toJson(QJsonDocument::Compact));
+}
+
+int SyncModule::getInscriptionCount(const QString& channelId)
+{
+    return m_channelIndexer->getInscriptionCount(channelId);
+}
+
+void SyncModule::followIndex(const QString& channelId)
+{
+    m_channelIndexer->follow(channelId);
+}
+
+void SyncModule::unfollowIndex(const QString& channelId)
+{
+    m_channelIndexer->unfollow(channelId);
+}
+
+void SyncModule::followPrefix(const QString& appPrefix)
+{
+    m_channelIndexer->followPrefix(appPrefix);
+}
+
+void SyncModule::unfollowPrefix(const QString& appPrefix)
+{
+    m_channelIndexer->unfollowPrefix(appPrefix);
 }
 
 void SyncModule::setAppPrefix(const QString& appPrefix)

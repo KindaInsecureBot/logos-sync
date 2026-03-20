@@ -47,6 +47,7 @@ if(BUILD_MODULE)
     target_sources(sync_module_plugin PRIVATE
         src/content_store.cpp
         src/channel_sync.cpp
+        src/channel_indexer.cpp
         src/peer_sync.cpp
         src/sync_module.cpp
     )
@@ -118,5 +119,9 @@ if(BUILD_TESTS)
 
     add_sync_test(test_peer_sync
         "tests/test_peer_sync.cpp;src/peer_sync.cpp"
+    )
+
+    add_sync_test(test_channel_indexer
+        "tests/test_channel_indexer.cpp;src/channel_indexer.cpp"
     )
 endif()
