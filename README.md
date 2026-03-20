@@ -262,69 +262,189 @@ sync->invokeRemoteMethod("sync_module", "peerUnsubscribe",  pubkeyHex);
 
 ## Usage Examples
 
-### Blog plugin
+### Example 1: Blog — Publish a post
+
+A blog author writes a post. The content gets stored (CID), the CID is inscribed
+on the author's L1 channel, and peers are notified in real-time.
 
 ```cpp
-void BlogPlugin::initLogos(LogosAPI* api)
+void BlogPlugin::publishPost(const QByteArray& postJson)
 {
     LogosAPIClient* sync = api->getClient("sync_module");
 
-    // Set up PeerSync for blog namespace
-    sync->invokeRemoteMethod("sync_module", "setAppPrefix", QString("BLOG"));
-    sync->invokeRemoteMethod("sync_module", "setOwnPubkey", m_ownPubkey);
-
-    // Publish a post: store body → CID, broadcast notification
+    // 1. Store the post content → get back a CID
     QString cid = sync->invokeRemoteMethod("sync_module", "store",
-                      postJson.toUtf8()).toString();
+                      postJson).toString();
+    // cid = "bafy2bzace..." (content-addressed, immutable)
+
+    // 2. Inscribe the CID on the author's L1 blog channel
+    //    Channel ID = SHA-256("λBLOG:" + authorPubkey)
     QString channelId = sync->invokeRemoteMethod("sync_module",
                             "deriveChannelId", QString("BLOG"), m_ownPubkey).toString();
     sync->invokeRemoteMethod("sync_module", "inscribe", channelId, cid.toUtf8());
+    // Now anyone can find this post by reading the author's channel
 
-    // Subscribe to an author
-    sync->invokeRemoteMethod("sync_module", "peerSubscribe", authorPubkey);
+    // 3. Broadcast to online subscribers via Chat SDK
+    sync->invokeRemoteMethod("sync_module", "broadcast",
+        QJsonDocument(QJsonObject{{"type","new_post"},{"cid",cid}}).toJson());
 }
 ```
 
-### Notes plugin
+**What happens on-chain:** The author's channel `λBLOG:<pubkey>` now has
+an inscription pointing to the post's CID. This is permanent and discoverable
+by anyone running a Basecamp node.
+
+---
+
+### Example 2: Feed Reader — Discover and follow all blogs
+
+A reader plugin wants to show a feed of all blogs on the network.
+No server, no API — just query the L1 channels.
 
 ```cpp
-// Notes uses its own channel namespace — no collision with BLOG channels
-QString notesChannelId = ChannelSync::deriveChannelId(LogosSync::Apps::NOTES, noteId);
-syncModule->channelSync()->inscribe(notesChannelId, noteData);
-```
-
-### Reader plugin (using ChannelIndexer)
-
-```cpp
-void ReaderPlugin::initLogos(LogosAPI* api)
+void FeedReader::initLogos(LogosAPI* api)
 {
     LogosAPIClient* sync = api->getClient("sync_module");
 
-    // Discover all blog channels
+    // 1. Discover all blog channels on the network
+    //    Queries the blockchain node for all channels with λBLOG: prefix
     QString json = sync->invokeRemoteMethod("sync_module", "discoverChannels",
                        QString("BLOG")).toString();
-    // json = [{"channelId":"...","inscriptionCount":N}, ...]
+    // json = [
+    //   {"channelId":"a1b2c3...","latestCid":"bafy...","inscriptionCount":12},
+    //   {"channelId":"d4e5f6...","latestCid":"bafy...","inscriptionCount":3},
+    //   ...
+    // ]
 
-    // Follow prefix — receive live events for all current and future BLOG channels
+    // 2. For each blog, get the latest post
+    QJsonArray channels = QJsonDocument::fromJson(json.toUtf8()).array();
+    for (const auto& ch : channels) {
+        QString channelId = ch.toObject()["channelId"].toString();
+        QByteArray latestCid = sync->invokeRemoteMethod("sync_module",
+                                   "getLatestInscription", channelId).toByteArray();
+        // Fetch the actual content from Storage
+        QByteArray post = sync->invokeRemoteMethod("sync_module", "fetch",
+                              QString::fromUtf8(latestCid)).toByteArray();
+        displayPost(post);
+    }
+
+    // 3. Follow ALL blog channels — get notified of new posts from anyone
     sync->invokeRemoteMethod("sync_module", "followPrefix", QString("BLOG"));
+    // Now indexInscriptionDiscovered fires whenever any blog publishes
+    // indexChannelDiscovered fires when a brand new blog appears
+}
+```
 
-    // Connect to indexInscriptionDiscovered to receive live updates
-    // (via SyncModule signal forwarded from ChannelIndexer)
+**The key insight:** No indexer service needed. The Basecamp node is already
+running — the ChannelIndexer just queries it. Cold start = one prefix scan.
+
+---
+
+### Example 3: Blog History — Paginated reading
+
+Load an author's full post history with cursor-based pagination.
+
+```cpp
+void FeedReader::loadAuthorHistory(const QString& authorPubkey)
+{
+    LogosAPIClient* sync = api->getClient("sync_module");
+    QString channelId = sync->invokeRemoteMethod("sync_module",
+                            "deriveChannelId", QString("BLOG"), authorPubkey).toString();
+
+    // First page (20 posts, oldest first)
+    QString pageJson = sync->invokeRemoteMethod("sync_module", "getHistory",
+                           channelId, QString("{}"), 20).toString();
+    QJsonObject page = QJsonDocument::fromJson(pageJson.toUtf8()).object();
+
+    QJsonArray inscriptions = page["inscriptions"].toArray();
+    for (const auto& insc : inscriptions) {
+        QString cid = insc.toObject()["data"].toString();
+        QByteArray post = sync->invokeRemoteMethod("sync_module", "fetch", cid).toByteArray();
+        displayPost(post);
+    }
+
+    // More pages?
+    if (page["hasMore"].toBool()) {
+        QJsonObject cursor = page["nextCursor"].toObject();
+        // Pass cursor to next getHistory() call to continue
+        // Cursor is serializable — save to disk for resume across restarts
+    }
+}
+```
+
+---
+
+### Example 4: Encrypted Notes — Private backup with L1 anchoring
+
+Notes are encrypted locally, stored content-addressed, and anchored on L1
+so the author can always recover their history from any device with the same key.
+
+```cpp
+void NotesPlugin::backupNote(const QByteArray& encryptedNote, const QString& noteId)
+{
+    LogosAPIClient* sync = api->getClient("sync_module");
+
+    // 1. Store encrypted blob (opaque bytes — Storage module doesn't decrypt)
+    QString cid = sync->invokeRemoteMethod("sync_module", "store",
+                      encryptedNote).toString();
+
+    // 2. Inscribe on author's notes channel (separate namespace from blogs)
+    QString channelId = sync->invokeRemoteMethod("sync_module",
+                            "deriveChannelId", QString("NOTES"), m_ownPubkey).toString();
+    QJsonObject envelope{{"noteId", noteId}, {"cid", cid}, {"ts", QDateTime::currentSecsSinceEpoch()}};
+    sync->invokeRemoteMethod("sync_module", "inscribe", channelId,
+        QJsonDocument(envelope).toJson(QJsonDocument::Compact));
+
+    // 3. On another device: scan the NOTES channel, fetch CIDs, decrypt locally
+    //    No server knows the content. The L1 channel is just pointers.
+}
+```
+
+---
+
+### Example 5: Wiki — Collaborative with version history
+
+A wiki page is owned by a channel. Each edit inscribes a new CID.
+The full edit history is the channel's inscription log.
+
+```cpp
+void WikiPlugin::savePage(const QString& pageId, const QByteArray& content)
+{
+    LogosAPIClient* sync = api->getClient("sync_module");
+
+    // Store new version
+    QString cid = sync->invokeRemoteMethod("sync_module", "store", content).toString();
+
+    // Inscribe on the page's channel
+    QString channelId = sync->invokeRemoteMethod("sync_module",
+                            "deriveChannelId", QString("WIKI"), pageId).toString();
+    sync->invokeRemoteMethod("sync_module", "inscribe", channelId, cid.toUtf8());
+
+    // Notify collaborators
+    sync->invokeRemoteMethod("sync_module", "broadcast",
+        QJsonDocument(QJsonObject{{"type","edit"},{"page",pageId},{"cid",cid}}).toJson());
 }
 
-// Read full history for an author's channel
-void ReaderPlugin::loadAuthorHistory(const QString& channelId)
+void WikiPlugin::showPageHistory(const QString& pageId)
 {
-    ChannelIndexer* ci = syncModule->channelIndexer();
-    IndexerPage page   = ci->getHistory(channelId, IndexerCursor(), 20);
-    for (const Inscription& insc : page.inscriptions) {
-        // insc.data is typically a CID — fetch full content via ContentStore
-        QByteArray content = syncModule->contentStore()->fetch(
-            QString::fromUtf8(insc.data));
-    }
-    if (page.hasMore) {
-        // Continue with page.nextCursor on next call
-    }
+    LogosAPIClient* sync = api->getClient("sync_module");
+    QString channelId = sync->invokeRemoteMethod("sync_module",
+                            "deriveChannelId", QString("WIKI"), pageId).toString();
+
+    // Every inscription = one edit. Full version history on L1.
+    QString history = sync->invokeRemoteMethod("sync_module", "getHistory",
+                          channelId, QString("{}"), 100).toString();
+    // Display as version timeline — each entry has slot (block height) for timestamp
+}
+
+void WikiPlugin::discoverAllPages()
+{
+    LogosAPIClient* sync = api->getClient("sync_module");
+
+    // Find every wiki page on the network
+    QString pages = sync->invokeRemoteMethod("sync_module", "discoverChannels",
+                        QString("WIKI")).toString();
+    // Each channel = one page. Build a page index from this.
 }
 ```
 
