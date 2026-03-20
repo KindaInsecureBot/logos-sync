@@ -1,5 +1,5 @@
 {
-  description = "logos-sync — shared Storage/Sync library for Logos Basecamp plugins";
+  description = "logos-pipe — shared Storage/Sync library for Logos Basecamp plugins";
 
   inputs = {
     logos-module-builder.url = "github:logos-co/logos-module-builder";

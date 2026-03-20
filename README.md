@@ -1,4 +1,4 @@
-# logos-sync
+# logos-pipe
 
 Shared Storage/Sync library for **Logos Basecamp** plugins — content-addressed storage, Zone SDK L1 channel inscriptions, and Chat SDK peer messaging, in one reusable module.
 
@@ -6,7 +6,7 @@ Shared Storage/Sync library for **Logos Basecamp** plugins — content-addressed
 
 ## What / Why
 
-Every Basecamp plugin that needs to store blobs, anchor data on-chain, or do live P2P messaging ends up re-implementing the same three wrappers.  `logos-sync` extracts those wrappers from `logos-blog-lez` into a standalone `sync_module` that any plugin can depend on.
+Every Basecamp plugin that needs to store blobs, anchor data on-chain, or do live P2P messaging ends up re-implementing the same three wrappers.  `logos-pipe` extracts those wrappers from `logos-blog-lez` into a standalone `sync_module` that any plugin can depend on.
 
 ```
    blog_plugin ──┐
@@ -23,7 +23,7 @@ Every Basecamp plugin that needs to store blobs, anchor data on-chain, or do liv
 ## Architecture
 
 ```
-logos-sync/
+logos-pipe/
 ├── src/
 │   ├── sync_types.h        # deriveChannelId / deriveConvoId helpers + App constants
 │   ├── content_store.h/cpp # ContentStore — wraps storage_module
