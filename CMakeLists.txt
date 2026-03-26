@@ -44,6 +44,8 @@ if(BUILD_MODULE)
         PLUGIN_TYPE generic
     )
 
+    configure_file(src/metadata.json ${CMAKE_CURRENT_BINARY_DIR}/metadata.json COPYONLY)
+
     target_sources(sync_module_plugin PRIVATE
         src/content_store.cpp
         src/channel_sync.cpp
