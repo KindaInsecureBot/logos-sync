@@ -2,7 +2,13 @@
     "name": "sync_module",
     "version": "0.1.0",
     "type": "core",
-    "description": "Shared sync library for Logos Basecamp plugins",
-    "interface": "com.logos.SyncModuleInterface",
-    "dependencies": []
+    "author": "KindaInsecureBot",
+    "description": "Shared Storage/Sync library for Logos Basecamp plugins",
+    "category": "infrastructure",
+    "dependencies": [],
+    "icon": "",
+    "main": {
+        "linux-amd64": "sync_module_plugin.so"
+    },
+    "manifestVersion": "0.1.0"
 }
