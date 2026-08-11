@@ -1,5 +1,7 @@
 # logos-pipe
 
+> **Disclaimer:** This is a personal, experimental hobby project. It is not an official Logos product. Not audited.
+
 Shared Storage/Sync library for **Logos Basecamp** plugins — content-addressed storage, Zone SDK L1 channel inscriptions, and Chat SDK peer messaging, in one reusable module.
 
 ---
